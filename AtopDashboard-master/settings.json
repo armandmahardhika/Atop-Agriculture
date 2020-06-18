@@ -1,0 +1,15 @@
+//settings.json vs code workspace settings
+{
+  // Format a file on save.
+  "editor.formatOnSave": true,
+  // Support using flow through your node_modules folder,
+  "flow.useNPMPackagedFlow": true,
+  // Enable/disable JavaScript validation. (For Flow)
+  "javascript.validate.enable": false,
+  // Enable/disable default JavaScript formatter (For Prettier)
+  "javascript.format.enable": false,
+  // Use 'prettier-eslint' instead of 'prettier'. Other settings will only be fallbacks in case they could not be inferred from eslint rules.
+  "prettier.eslintIntegration": true,
+  // if you use npm to manage modules, change yarn to npm
+  "eslint.packageManager": "yarn"
+}
