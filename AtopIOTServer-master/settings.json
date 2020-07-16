@@ -1,4 +1,4 @@
 {
   "expire": 600,
-  "refreshexpire": 1200
+  "refreshexpire": 12000
 }

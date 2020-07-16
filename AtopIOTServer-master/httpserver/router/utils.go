@@ -2,13 +2,28 @@ package router // Get JSON body and transform to bson
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 
+	"github.com/austinjan/AtopIOTServer/mongodb"
+	"github.com/austinjan/AtopIOTServer/utils"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+//GetUserID  get user id from request jwt token
+func GetUserID(r *http.Request) string {
+	user := r.Context().Value("user")
+	claims := user.(*jwt.Token).Claims.(jwt.MapClaims)
+	key, ok := claims["user"]
+	if !ok {
+		return ""
+	}
+	return key.(string)
+}
 
 func parseBody(r *http.Request) (bson.M, error) {
 	b, err := ioutil.ReadAll(r.Body)
@@ -47,6 +62,31 @@ func parseQuery(r *http.Request) (bson.M, error) {
 	return query, err
 }
 
+// getURLCOllection(r,name) get url param by name
+// example:
+// collection, err := getURLParam(r,"ids")
+// 	if err != nil {
+// 		res.SendGeneralError(err)
+// 		return
+// 	}
+func getURLParam(r *http.Request, param string) (string, error) {
+	vars := mux.Vars(r)
+
+	c, ok := vars[param]
+	if !ok {
+		return "", fmt.Errorf("Can not find {%s} in URL", param)
+	}
+
+	return c, nil
+}
+
+// getURLCOllection() get url collection template
+// example:
+// collection, err := getURLCollection(r)
+// 	if err != nil {
+// 		res.SendGeneralError(err)
+// 		return
+// 	}
 func getURLCollection(r *http.Request) (string, error) {
 	vars := mux.Vars(r)
 
@@ -67,4 +107,20 @@ func getURLID(r *http.Request) (string, error) {
 	}
 
 	return c, nil
+}
+
+func requestToPermissionInfo(r *http.Request, c string) utils.RequestPermission {
+	db := mongodb.GetDB()
+	role, err := db.GetRoleByID(GetUserID(r))
+	if err != nil {
+		role.Role = ""
+		role.Name = ""
+	}
+	permissinInfo := utils.RequestPermission{
+		Role:       role.Role,
+		Name:       role.Name,
+		Method:     r.Method,
+		Collection: c,
+	}
+	return permissinInfo
 }

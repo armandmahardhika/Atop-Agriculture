@@ -2,9 +2,11 @@ package router
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/austinjan/AtopIOTServer/utils"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -18,14 +20,20 @@ const (
 	CodeGeneralFailure = 1
 	//CodeGeneralFailure normal error
 	CodeAuthenticateFailure = 3
-	//CodeInvalidQueryParameter invalid parameter of query
-	CodeInvalidQueryParameter = 4
+	//CodeInvalidQAPIInput invalid parameter of query
+	CodeInvalidQAPIInput = 4
 	//CodeInvalidBodyParameter invalid parameter of body
 	CodeInvalidBodyParameter = 5
 	//CodeInvalidBodyParameter invalid parameter of body
 	CodeServerInternalError = 6
+	//CodeDatabaseError database error
+	CodeDatabaseError = 7
 	//ResultEmpty empty result
 	CodeResultEmpty = 8
+	// CodeDuplicateUniqueKey data have duplicate value which should be unique
+	CodeDuplicateUniqueValue = 9
+	// CodePermissionFailure
+	CodePermissionFailure = 11
 	// CodeConvertJSONFail is error status when system
 	// marshal data to json fail
 	CodeConvertJSONFail = 100
@@ -33,14 +41,17 @@ const (
 
 // ResponseStatus is a status string
 var ResponseStatus = map[int]string{
-	CodeOK:                    "OK",
-	CodeGeneralFailure:        "Gernal failure",
-	CodeAuthenticateFailure:   "Authentic failure",
-	CodeInvalidQueryParameter: "Invalid query parameter",
-	CodeInvalidBodyParameter:  "Invalid body parameter",
-	CodeServerInternalError:   "Server internal error",
-	CodeResultEmpty:           "Empty Result",
-	CodeConvertJSONFail:       "Convert reponse to JSON format fail",
+	CodeOK:                   "OK",
+	CodeGeneralFailure:       "Gernal failure",
+	CodeAuthenticateFailure:  "Authentic failure",
+	CodeInvalidQAPIInput:     "Invalid query parameter or URL",
+	CodeInvalidBodyParameter: "Invalid body parameter",
+	CodeServerInternalError:  "Server internal error",
+	CodeDatabaseError:        "Database process error",
+	CodeResultEmpty:          "Empty Result",
+	CodeDuplicateUniqueValue: "Value should be unique",
+	CodePermissionFailure:    "Permission denied",
+	CodeConvertJSONFail:      "Convert reponse to JSON format fail",
 }
 
 // AtopResponse response object
@@ -91,17 +102,26 @@ func (r *AtopResponse) SendResponse() {
 	return
 }
 
-// SendServerError send error response (server error)
-func (r *AtopResponse) SendServerError(err error) {
-	r.SendErrorResponseWithMessage(CodeServerInternalError, err.Error())
-}
-
 // SendAuthenticateError send error response (Body error)
 func (r *AtopResponse) SendAuthenticateError(message string) {
-	r.SendErrorResponseWithMessage(CodeAuthenticateFailure, message)
+	w := r.Writer
+	r.makeError(CodeAuthenticateFailure)
+	r.makeTimeStamp()
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusUnauthorized)
+	j, _ := json.Marshal(r.Body)
+	w.Write(j)
+	return
 }
 
 // SendGeneralError send error response (general error)
+func (r *AtopResponse) SendPermissionError(info utils.RequestPermission) {
+	msg := fmt.Sprintf("Permission denied: %s %s %s ", info.Name, info.Method, info.Collection)
+	r.SendErrorResponseWithMessage(CodePermissionFailure, msg)
+}
+
+// SendGeneralError send error response (general error)
+//
 func (r *AtopResponse) SendGeneralError(err error) {
 	r.SendErrorResponseWithMessage(CodeGeneralFailure, err.Error())
 }
@@ -111,9 +131,23 @@ func (r *AtopResponse) SendBodyError(err error) {
 	r.SendErrorResponseWithMessage(CodeInvalidBodyParameter, err.Error())
 }
 
-// SendQueryError send error response (Body error)
-func (r *AtopResponse) SendQueryError(err error) {
-	r.SendErrorResponseWithMessage(CodeInvalidQueryParameter, err.Error())
+// SendAPIInputError send error response (Body error)
+func (r *AtopResponse) SendAPIInputError(err error) {
+	r.SendErrorResponseWithMessage(CodeInvalidQAPIInput, err.Error())
+}
+
+// SendServerError send error response (server error)
+func (r *AtopResponse) SendServerError(err error) {
+	r.SendErrorResponseWithMessage(CodeServerInternalError, err.Error())
+}
+
+// SendDatabaseError send error response (database error)
+func (r *AtopResponse) SendDatabaseError(err error) {
+	r.SendErrorResponseWithMessage(CodeDatabaseError, err.Error())
+}
+
+func (r *AtopResponse) SendUniqueValueError(err error) {
+	r.SendErrorResponseWithMessage(CodeDuplicateUniqueValue, err.Error())
 }
 
 // SendEmptyError send error response (empty result )

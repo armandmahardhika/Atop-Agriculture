@@ -22,7 +22,8 @@ func InitRouter(r *mux.Router) {
 		negroni.Wrap(s))
 	n.Use(negroni.NewRecovery())
 	r.PathPrefix("/apis").Handler(n)
-
+	initSecureRouter(s)
+	initMqttRouter(s)
 	initCrudRouter(s)
 	initNormalRouter(r)
 }

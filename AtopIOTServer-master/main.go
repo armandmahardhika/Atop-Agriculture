@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/austinjan/AtopIOTServer/config"
 	"github.com/austinjan/AtopIOTServer/httpserver"
+	"github.com/austinjan/AtopIOTServer/mqttclient"
 	"github.com/spf13/viper"
 )
 
@@ -27,6 +28,17 @@ func main() {
 	log.Println("Server start")
 	httpCtx, httpDone := context.WithCancel(context.Background())
 	go httpserver.Run(httpCtx)
+
+	mqttClient := mqttclient.NewLocalClient()
+
+	if err = mqttClient.Connect(); err != nil {
+		fmt.Println("Mqtt client connect error!")
+	}
+
+	mqttClient.Subscribe(map[string]byte{
+		"test/+":                0,
+		"$SYS/broker/clients/+": 0,
+	})
 
 	c := make(chan os.Signal, 1)
 	// We'll accept graceful shutdowns when quit via SIGINT (Ctrl+C)

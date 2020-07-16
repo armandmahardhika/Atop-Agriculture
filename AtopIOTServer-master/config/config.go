@@ -8,18 +8,11 @@ import (
 )
 
 // VERSION Server's version string
-var VERSION = "1.0.00"
+var VERSION = "1.0.01"
 
 func setDefault() {
 	viper.SetDefault("expire", 600)
-	viper.SetDefault("refreshExpire", 1200)
-	// viper.SetDefault("email", map[string]string{
-	// 	"host":     "gmail.com",
-	// 	"user":     "test",
-	// 	"password": "test"})
-	// viper.SetDefault("publickey", "./public.key")
-	// viper.SetDefault("expire", 600)
-	// viper.SetDefault("refreshExpire", 1200)
+	viper.SetDefault("refreshExpire", 120000)
 
 }
 

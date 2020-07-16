@@ -5,9 +5,12 @@ go 1.12
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/auth0/go-jwt-middleware v0.0.0-20200507191422-d30d7b9ece63
+	github.com/casbin/casbin/v2 v2.7.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/golang/snappy v0.0.1 // indirect
+	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4
 	github.com/rs/cors v1.7.0
 	github.com/spf13/viper v1.6.3

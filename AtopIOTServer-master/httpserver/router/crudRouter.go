@@ -1,25 +1,17 @@
 package router
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/austinjan/AtopIOTServer/mongodb"
+	"github.com/austinjan/AtopIOTServer/utils"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-func getUserID(r *http.Request) string {
-	user := r.Context().Value("user")
-	claims := user.(*jwt.Token).Claims.(jwt.MapClaims)
-	key, ok := claims["user"]
-	if !ok {
-		return ""
-	}
-	return key.(string)
-}
 
 func ping(w http.ResponseWriter, r *http.Request) {
 	res := NewResponse(r, w)
@@ -39,12 +31,12 @@ func read(w http.ResponseWriter, r *http.Request) {
 	res := NewResponse(r, w)
 	c, err := getURLCollection(r)
 	if err != nil {
-		res.SendGeneralError(err)
+		res.SendAPIInputError(err)
 		return
 	}
 	query, err := parseQuery(r)
 	if err != nil {
-		res.SendQueryError(err)
+		res.SendAPIInputError(err)
 		return
 	}
 	db := mongodb.GetDB()
@@ -62,7 +54,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 		res.SendEmptyError()
 		return
 	}
-	res.AddPayload(bson.M{"data": data, "count": count})
+	res.AddPayload(bson.M{"data": data, "total": count})
 	res.SendResponse()
 }
 
@@ -71,23 +63,36 @@ func putID(w http.ResponseWriter, r *http.Request) {
 	res := NewResponse(r, w)
 	c, err := getURLCollection(r)
 	if err != nil {
-		res.SendGeneralError(err)
+		res.SendAPIInputError(err)
 		return
 	}
+
+	// Check permission
+	rpi := requestToPermissionInfo(r, c)
+	if pass := utils.CheckPermission(&rpi); !pass {
+		res.SendPermissionError(rpi)
+		return
+	}
+
+	fmt.Println("putID 2")
+
 	id, err := getURLID(r)
 	if err != nil {
-		res.SendGeneralError(err)
+		res.SendAPIInputError(err)
 		return
 	}
+
 	body, err := parseBody(r)
 	if err != nil {
 		res.SendBodyError(err)
 		return
 	}
+	delete(body, "_id")
 	db := mongodb.GetDB()
+
 	result, updateErr := db.UpdateID(c, id, body)
 	if updateErr != nil {
-		res.SendGeneralError(updateErr)
+		res.SendDatabaseError(updateErr)
 		return
 	}
 	res.AddPayload(bson.M{"pre": result})
@@ -95,28 +100,139 @@ func putID(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func getCurrentUser(w http.ResponseWriter, r *http.Request) {
+func post(w http.ResponseWriter, r *http.Request) {
 	res := NewResponse(r, w)
-	idHex := getUserID(r)
-	id, err := primitive.ObjectIDFromHex(idHex)
+	c, err := getURLCollection(r)
 	if err != nil {
-		res.SendServerError(err)
+		res.SendAPIInputError(err)
 		return
 	}
+
+	rpi := requestToPermissionInfo(r, c)
+	if pass := utils.CheckPermission(&rpi); !pass {
+		res.SendPermissionError(rpi)
+		return
+	}
+
+	body, err := parseBody(r)
+	if err != nil {
+		res.SendBodyError(err)
+		return
+	}
+	delete(body, "_id")
 	db := mongodb.GetDB()
-	result, err := db.FindOne("users", bson.M{"_id": id})
-	if err != nil {
-		res.SendServerError(err)
+	// check unique
+	if pass, msg := db.CheckUniqueValue(c, body); !pass {
+		res.SendUniqueValueError(errors.New(msg))
 		return
 	}
-	res.AddPayload(bson.M{"user": result})
+
+	result, err := db.Insert(c, body)
+	if err != nil {
+		res.SendDatabaseError(err)
+		return
+	}
+	res.AddPayload(result)
+	res.SendResponse()
+}
+
+func remove(w http.ResponseWriter, r *http.Request) {
+	res := NewResponse(r, w)
+	c, err := getURLCollection(r)
+	if err != nil {
+		res.SendAPIInputError(err)
+		return
+	}
+
+	rpi := requestToPermissionInfo(r, c)
+	if pass := utils.CheckPermission(&rpi); !pass {
+		res.SendPermissionError(rpi)
+		return
+	}
+
+	id, err := getURLID(r)
+	if err != nil {
+		res.SendAPIInputError(err)
+		return
+	}
+
+	db := mongodb.GetDB()
+
+	result, err := db.DeleteOne(c, id)
+	if err != nil {
+		res.SendDatabaseError(err)
+		return
+	}
+	res.AddPayload(result)
+	res.SendResponse()
+}
+
+func deleteMany(w http.ResponseWriter, r *http.Request) {
+	res := NewResponse(r, w)
+	c, err := getURLCollection(r)
+	if err != nil {
+		res.SendAPIInputError(err)
+		return
+	}
+
+	query, err := parseQuery(r)
+	if err != nil {
+		res.SendAPIInputError(err)
+		return
+	}
+
+	rpi := requestToPermissionInfo(r, c)
+	if pass := utils.CheckPermission(&rpi); !pass {
+		res.SendPermissionError(rpi)
+	}
+
+	db := mongodb.GetDB()
+	result, err := db.DeleteMany(c, query)
+	if err != nil {
+		res.SendDatabaseError(err)
+		return
+	}
+	res.AddPayload(result)
+	res.SendResponse()
+}
+
+// params: {ids:[_id1, _id2]}  _id should be string
+func deleteIDs(w http.ResponseWriter, r *http.Request) {
+	res := NewResponse(r, w)
+	c, err := getURLCollection(r)
+	if err != nil {
+		res.SendAPIInputError(err)
+		return
+	}
+
+	querys, err := url.ParseQuery(r.URL.RawQuery)
+
+	query := make(map[string]interface{})
+	for k, v := range querys {
+		query[k] = v
+	}
+
+	rpi := requestToPermissionInfo(r, c)
+	if pass := utils.CheckPermission(&rpi); !pass {
+		res.SendPermissionError(rpi)
+	}
+
+	db := mongodb.GetDB()
+	result, err := db.DeleteIDs(c, query)
+	if err != nil {
+		res.SendDatabaseError(err)
+		return
+	}
+	res.AddPayload(result)
 	res.SendResponse()
 }
 
 func initCrudRouter(r *mux.Router) {
-
 	r.HandleFunc("/ping", ping).Methods("GET")
 	r.HandleFunc("/crud/{collection}", read).Methods("GET")
 	r.HandleFunc("/crud/{collection}/{id:[0-9a-f]+}", putID).Methods("PUT")
-	r.HandleFunc("/currentUser", getCurrentUser).Methods("GET")
+	r.HandleFunc("/crud/{collection}", post).Methods("POST")
+	r.HandleFunc("/crud/{collection}/{id:[0-9a-f]+}", remove).Methods("DELETE")
+	r.HandleFunc("/crud/{collection}", deleteMany).Methods("DELETE")
+	r.HandleFunc("/delete/{collection}", deleteIDs).Methods("DELETE")
 }

@@ -32,7 +32,7 @@ func GetDB() *DB {
 
 // Initial database
 func initDB(url string) *DB {
-	const defaultDatabase = "atopdatadb"
+	const defaultDatabase = "atop"
 	db := new(DB)
 	var err error
 	db.client, err = mongo.NewClient(options.Client().ApplyURI(url))
@@ -53,6 +53,12 @@ func initDB(url string) *DB {
 	db.db = db.client.Database(defaultDatabase)
 	log.Printf("Database %s connected... \n", url)
 	return db
+}
+
+func (d *DB) GetCollections() []string {
+	result, _ := d.db.ListCollectionNames(context.TODO(), bson.M{})
+
+	return result
 }
 
 func (d *DB) Test() {
